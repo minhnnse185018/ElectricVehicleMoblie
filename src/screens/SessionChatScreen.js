@@ -165,7 +165,7 @@ export default function SessionChatScreen({ route, navigation }) {
       : Number.MAX_SAFE_INTEGER;
     return timeA - timeB;
   });
-
+1
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
