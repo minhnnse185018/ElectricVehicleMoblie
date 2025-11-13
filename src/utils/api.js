@@ -83,16 +83,56 @@ export async function closeSession(sessionId) {
   return res.data;
 }
 
-export async function sendSessionMessage(sessionId, { text, files = [] } = {}) {
+export async function sendSessionMessage(
+  sessionId,
+  { text, files = [], imageUrl, userId, generateRoutine } = {}
+) {
+  // The backend expects multipart/form-data with fields:
+  // SessionId, UserId, Content, Image (file), ImageUrl, GenerateRoutine
   const form = new FormData();
-  if (text) form.append('text', text);
-  // Attach any file(s), if provided. Each item: { uri, name, type }
-  for (const f of files) {
-    if (f?.uri) form.append('files', { uri: f.uri, name: f.name || 'attachment', type: f.type || 'application/octet-stream' });
+
+  // Required identifiers
+  if (sessionId) form.append('SessionId', String(sessionId));
+  const uid = userId || (await getCurrentUserId());
+  if (uid) form.append('UserId', String(uid));
+
+  // Text content
+  if (typeof text === 'string' && text.length > 0) {
+    form.append('Content', text);
+    // Keep a fallback field used by older handlers
+    form.append('text', text);
   }
-  const headers = { ...(await authHeaders()), 'Content-Type': 'multipart/form-data' };
-  const res = await api.post(`/api/chat/sessions/${sessionId}/messages`, form, { headers });
-  return res.data; // ServiceResult of ChatMessageDto
+
+  // Single primary image (API supports one "Image"). If multiple provided, send the first.
+  if (Array.isArray(files) && files.length > 0) {
+    const f = files[0];
+    if (f?.uri) {
+      form.append('Image', {
+        uri: f.uri,
+        name: f.name || 'attachment',
+        type: f.type || 'application/octet-stream',
+      });
+    }
+  }
+
+  // Optional remote image URL
+  if (imageUrl) form.append('ImageUrl', String(imageUrl));
+
+  if (typeof generateRoutine !== 'undefined') {
+    form.append('GenerateRoutine', String(Boolean(generateRoutine)));
+  }
+
+  const headers = {
+    ...(await authHeaders()),
+    'Content-Type': 'multipart/form-data',
+  };
+
+  const res = await api.post(
+    `/api/chat/sessions/${sessionId}/messages`,
+    form,
+    { headers }
+  );
+  return res.data; // ServiceResult<ChatMessageDto>
 }
 
 // Alias for tests: map to sendSessionMessage
