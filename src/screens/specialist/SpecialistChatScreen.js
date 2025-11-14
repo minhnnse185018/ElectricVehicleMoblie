@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Image, Modal } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { closeSession, getChatSession, sendSpecialistMessage, assignSession } from '../../utils/api';
 import { getCurrentUserId } from '../../utils/auth';
 
@@ -11,6 +12,8 @@ export default function SpecialistChatScreen({ route, navigation }) {
   const [error, setError] = useState('');
   const [text, setText] = useState('');
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [viewingImage, setViewingImage] = useState(null);
+  const [attachedImage, setAttachedImage] = useState(null);
   const listRef = useRef(null);
   const refreshTimerRef = useRef(null);
 
@@ -102,9 +105,21 @@ export default function SpecialistChatScreen({ route, navigation }) {
       // For specialist channel: backend saves message without calling AI
       // Response: { success: true, data: { ...ChatMessageDto } }
       // Dùng sendSpecialistMessage với format đúng cho backend (Content, Image, SessionId, UserId)
-      await sendSpecialistMessage(sessionId, { text });
+      await sendSpecialistMessage(sessionId, {
+        text,
+        files: attachedImage
+          ? [
+              {
+                uri: attachedImage.uri,
+                name: attachedImage.name || 'attachment.jpg',
+                type: attachedImage.type || 'image/jpeg',
+              },
+            ]
+          : [],
+      });
       
       setText('');
+      setAttachedImage(null);
       // Reload session to get updated messages
       await load();
       setTimeout(() => {
@@ -118,6 +133,61 @@ export default function SpecialistChatScreen({ route, navigation }) {
       Alert.alert('Lỗi', errorMsg);
     } finally {
       setSending(false);
+    }
+  };
+
+  // ==== IMAGE PICKER ====
+  const openCamera = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Quyền truy cập', 'Cần quyền truy cập camera để chụp ảnh');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker?.MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAttachedImage({
+          uri: result.assets[0].uri,
+          name: result.assets[0].fileName || 'camera.jpg',
+          type: result.assets[0].type || 'image/jpeg',
+        });
+      }
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể mở camera');
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Quyền truy cập', 'Cần quyền truy cập thư viện ảnh để chọn ảnh');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker?.MediaType?.Images ?? ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setAttachedImage({
+          uri: result.assets[0].uri,
+          name: result.assets[0].fileName || 'image.jpg',
+          type: result.assets[0].type || 'image/jpeg',
+        });
+      }
+    } catch (e) {
+      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh');
     }
   };
 
@@ -318,7 +388,8 @@ export default function SpecialistChatScreen({ route, navigation }) {
                 
                 // Determine message content
                 const messageContent = m?.content || m?.Content || m?.text || m?.message || '';
-                const messageTime = m?.created_at || m?.CreatedAt;
+                const messageImageUrl = m?.imageUrl || m?.ImageUrl || m?.image_url || null;
+                const messageTime = m?.created_at || m?.createdAt || m?.CreatedAt;
                 
                 // Tin nhắn của mình -> hiển thị bên phải, màu xanh
                 // Tin nhắn của đối phương -> hiển thị bên trái, màu xám
@@ -338,9 +409,27 @@ export default function SpecialistChatScreen({ route, navigation }) {
                         showOnRight ? styles.bubbleMe : styles.bubbleOther
                       ]}
                     >
-                      <Text style={[styles.msgText, showOnRight && styles.msgTextMe]}>
-                        {messageContent}
-                      </Text>
+                      {/* IMAGE */}
+                      {messageImageUrl ? (
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setViewingImage(messageImageUrl)}
+                        >
+                          <Image
+                            source={{ uri: messageImageUrl }}
+                            style={styles.messageImage}
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+                      
+                      {/* TEXT */}
+                      {messageContent ? (
+                        <Text style={[styles.msgText, showOnRight && styles.msgTextMe]}>
+                          {messageContent}
+                        </Text>
+                      ) : null}
+                      
                       {messageTime && (
                         <Text style={[styles.msgTime, showOnRight && styles.msgTimeMe]}>
                           {new Date(messageTime).toLocaleTimeString('vi-VN', { 
@@ -391,7 +480,28 @@ export default function SpecialistChatScreen({ route, navigation }) {
                 </Text>
               </View>
             )}
+            {attachedImage && (
+              <View style={styles.attachedImageContainer}>
+                <Image
+                  source={{ uri: attachedImage.uri }}
+                  style={styles.attachedImagePreview}
+                />
+                <TouchableOpacity
+                  style={styles.removeImageButton}
+                  onPress={() => setAttachedImage(null)}
+                >
+                  <Text style={styles.removeImageText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <View style={styles.inputContainer}>
+              <TouchableOpacity
+                style={[styles.cameraBtn, !canSend && styles.cameraBtnDisabled]}
+                onPress={pickImage}
+                disabled={!canSend}
+              >
+                <Text style={styles.cameraBtnText}>📷</Text>
+              </TouchableOpacity>
               <TextInput
                 style={[styles.input, !canSend && styles.inputDisabled]}
                 placeholder={
@@ -407,9 +517,9 @@ export default function SpecialistChatScreen({ route, navigation }) {
                 editable={canSend}
               />
               <TouchableOpacity 
-                style={[styles.sendBtn, (!canSend || sending) && styles.sendBtnDisabled]} 
+                style={[styles.sendBtn, (!canSend || (sending || (!text.trim() && !attachedImage))) && styles.sendBtnDisabled]} 
                 onPress={onSend} 
-                disabled={!canSend || sending}
+                disabled={!canSend || sending || (!text.trim() && !attachedImage)}
               >
                 {sending ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -433,6 +543,37 @@ export default function SpecialistChatScreen({ route, navigation }) {
           )}
         </View>
       )}
+
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={!!viewingImage}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewingImage(null)}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity
+            style={styles.imageViewerCloseButton}
+            onPress={() => setViewingImage(null)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.imageViewerCloseText}>✕</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.imageViewerContent}
+            activeOpacity={1}
+            onPress={() => setViewingImage(null)}
+          >
+            {viewingImage && (
+              <Image
+                source={{ uri: viewingImage }}
+                style={styles.imageViewerImage}
+                resizeMode="contain"
+              />
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -482,6 +623,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderBottomLeftRadius: 4,
   },
+  messageImage: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
   msgText: { color: '#111827', fontSize: 15, lineHeight: 20 },
   msgTextMe: { color: '#fff' },
   msgTime: {
@@ -498,6 +645,37 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     backgroundColor: '#fff',
+  },
+  attachedImageContainer: {
+    position: 'relative',
+    marginBottom: 8,
+    marginHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  attachedImagePreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#ef4444',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  removeImageText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   infoBanner: {
     backgroundColor: '#FEF3C7',
@@ -551,6 +729,25 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
   },
+  cameraBtn: {
+    backgroundColor: '#E6F9EE',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#22C55E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 44,
+    height: 44,
+  },
+  cameraBtnDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+    opacity: 0.5,
+  },
+  cameraBtnText: {
+    fontSize: 20,
+  },
   input: {
     flex: 1,
     borderWidth: 1,
@@ -600,5 +797,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#9ca3af',
   },
   closeText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerContent: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageViewerCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 40,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerCloseText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+  },
 });
 
