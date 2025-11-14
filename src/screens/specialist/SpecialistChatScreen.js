@@ -11,7 +11,6 @@ export default function SpecialistChatScreen({ route, navigation }) {
   const [error, setError] = useState('');
   const [text, setText] = useState('');
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [debugInfo, setDebugInfo] = useState('');
   const listRef = useRef(null);
   const refreshTimerRef = useRef(null);
 
@@ -32,19 +31,10 @@ export default function SpecialistChatScreen({ route, navigation }) {
       // Response: { success: true, data: { ...ChatSessionDto, messages: [] } }
       const data = await getChatSession(sessionId, { includeMessages: true });
       
-      // Debug: log response structure
-      console.log('=== SpecialistChatScreen Load ===');
-      console.log('Raw data from getChatSession:', JSON.stringify(data, null, 2));
-      console.log('data?.data:', data?.data);
-      console.log('data?.messages:', data?.messages);
-      console.log('data?.data?.messages:', data?.data?.messages);
-      
       // Backend returns ServiceResult structure: { success: true, data: { session: {...}, messages: [] } }
       // Or sometimes: { success: true, data: { ...ChatSessionDto, messages: [] } }
       // Extract data field from ServiceResult
       const responseData = data?.data || data || {};
-      
-      console.log('Extracted responseData:', JSON.stringify(responseData, null, 2));
       
       // Handle nested structure: { session: {...}, messages: [] }
       // Or flat structure: { ...ChatSessionDto, messages: [] }
@@ -59,12 +49,6 @@ export default function SpecialistChatScreen({ route, navigation }) {
         // Flat structure: use as is
         sessionData = responseData;
       }
-      
-      console.log('Final sessionData:', JSON.stringify(sessionData, null, 2));
-      console.log('sessionData.messages:', sessionData.messages);
-      console.log('sessionData.Messages:', sessionData.Messages);
-      console.log('sessionData.state:', sessionData.state || sessionData.State);
-      console.log('sessionData.specialistId:', sessionData.specialistId || sessionData.SpecialistId);
       
       setSession(sessionData);
       
@@ -114,31 +98,11 @@ export default function SpecialistChatScreen({ route, navigation }) {
       setSending(true);
       setError('');
       
-      // Debug: log before sending
-      console.log('=== SpecialistChatScreen onSend ===');
-      console.log('SessionId:', sessionId);
-      console.log('Text:', text);
-      console.log('CurrentUserId:', currentUserId);
-      console.log('canSend:', canSend);
-      console.log('isSpecialist:', isSpecialist);
-      console.log('isAssigned:', isAssigned);
-      console.log('isClosed:', isClosed);
-      
-      // Debug info for mobile
-      setDebugInfo(`Đang gửi...\nSessionId: ${sessionId}\nText: ${text}\ncanSend: ${canSend}\nisSpecialist: ${isSpecialist}\nisAssigned: ${isAssigned}`);
-      
       // POST /api/chat/sessions/{sessionId}/messages
       // For specialist channel: backend saves message without calling AI
       // Response: { success: true, data: { ...ChatMessageDto } }
       // Dùng sendSpecialistMessage với format đúng cho backend (Content, Image, SessionId, UserId)
-      const response = await sendSpecialistMessage(sessionId, { text });
-      
-      // Debug: log response
-      console.log('=== onSend Response ===');
-      console.log('Response:', JSON.stringify(response, null, 2));
-      
-      // Debug info for mobile - success
-      setDebugInfo(`Gửi thành công!\nStatus: ${response?.success ? 'OK' : 'Unknown'}\nResponse keys: ${Object.keys(response || {}).join(', ')}`);
+      await sendSpecialistMessage(sessionId, { text });
       
       setText('');
       // Reload session to get updated messages
@@ -147,22 +111,10 @@ export default function SpecialistChatScreen({ route, navigation }) {
         listRef.current?.scrollToEnd?.({ animated: true });
       }, 50);
     } catch (e) {
-      // Debug: log error
-      console.error('=== SpecialistChatScreen onSend ERROR ===');
-      console.error('Error:', e);
-      console.error('Error message:', e?.message);
-      console.error('Error response:', e?.response);
-      console.error('Error status:', e?.response?.status);
-      console.error('Error data:', e?.response?.data);
-      
       // Backend returns 403 if specialist tries to send before assigning
       // Backend returns 409 if session is closed
       const errorMsg = e?.message || e?.response?.data?.message || 'Gửi tin nhắn thất bại';
       setError(errorMsg);
-      
-      // Debug info for mobile - error
-      setDebugInfo(`Lỗi!\nStatus: ${e?.response?.status || 'unknown'}\nMessage: ${errorMsg}\nError keys: ${Object.keys(e?.response?.data || {}).join(', ')}`);
-      
       Alert.alert('Lỗi', errorMsg);
     } finally {
       setSending(false);
@@ -173,31 +125,16 @@ export default function SpecialistChatScreen({ route, navigation }) {
     try {
       setError('');
       setLoading(true);
-      setDebugInfo('Đang nhận phiên...');
-      
-      // Debug: log before assigning
-      console.log('=== SpecialistChatScreen onAssign ===');
-      console.log('SessionId:', sessionId);
-      console.log('CurrentUserId:', currentUserId);
-      console.log('Current session state:', session?.state || session?.State);
       
       // POST /api/chat/sessions/{sessionId}/assignments
       // Backend assigns session to current specialist (from JWT)
       // Response: { success: true, data: { ...ChatSessionDto } }
       const response = await assignSession(sessionId);
       
-      // Debug: log response
-      console.log('=== onAssign Response ===');
-      console.log('Response:', JSON.stringify(response, null, 2));
-      console.log('response?.data:', response?.data);
-      console.log('response?.success:', response?.success);
-      
       // Backend returns ServiceResult: { success: true, data: { ...ChatSessionDto } }
       // Or sometimes: { success: true, data: { session: {...}, messages: [] } }
       // Extract session data from response
       const responseData = response?.data || response || {};
-      
-      console.log('Updated responseData:', JSON.stringify(responseData, null, 2));
       
       // Handle nested structure: { session: {...}, messages: [] }
       // Or flat structure: { ...ChatSessionDto }
@@ -216,39 +153,19 @@ export default function SpecialistChatScreen({ route, navigation }) {
         };
       }
       
-      console.log('Final updatedSessionData:', JSON.stringify(updatedSessionData, null, 2));
-      console.log('Updated state:', updatedSessionData?.state || updatedSessionData?.State);
-      console.log('Updated specialistId:', updatedSessionData?.specialistId || updatedSessionData?.SpecialistId);
-      
       // Update session state immediately from response
       if (updatedSessionData && Object.keys(updatedSessionData).length > 0) {
         setSession(updatedSessionData);
-        console.log('✅ Session state updated immediately from assign response');
       }
       
       // Also reload to get latest data with messages
       await load();
       
-      // Debug info for mobile - success
-      setDebugInfo(`Đã nhận phiên thành công!\nState: ${updatedSessionData?.state || updatedSessionData?.State || 'unknown'}\nSpecialistId: ${updatedSessionData?.specialistId || updatedSessionData?.SpecialistId || 'none'}`);
-      
       Alert.alert('Thành công', 'Bạn đã nhận phiên này. Bây giờ bạn có thể chat!');
     } catch (e) {
-      // Debug: log error
-      console.error('=== SpecialistChatScreen onAssign ERROR ===');
-      console.error('Error:', e);
-      console.error('Error message:', e?.message);
-      console.error('Error response:', e?.response);
-      console.error('Error status:', e?.response?.status);
-      console.error('Error data:', e?.response?.data);
-      
       // Backend returns 409 if session already assigned or 403 if not allowed
       const errorMsg = e?.response?.data?.message || e?.message || 'Nhận phiên thất bại';
       setError(errorMsg);
-      
-      // Debug info for mobile - error
-      setDebugInfo(`Lỗi nhận phiên!\nStatus: ${e?.response?.status || 'unknown'}\nMessage: ${errorMsg}`);
-      
       Alert.alert('Lỗi', errorMsg);
     } finally {
       setLoading(false);
@@ -322,17 +239,6 @@ export default function SpecialistChatScreen({ route, navigation }) {
     (isOwner && !isClosed)
   );
   
-  // Debug: log canSend conditions
-  console.log('=== canSend Debug ===');
-  console.log('isClosed:', isClosed);
-  console.log('isSpecialist:', isSpecialist);
-  console.log('isAssigned:', isAssigned);
-  console.log('isOwner:', isOwner);
-  console.log('sessionState:', sessionState);
-  console.log('sessionSpecialistId:', sessionSpecialistId);
-  console.log('currentUserId:', currentUserId);
-  console.log('canSend:', canSend);
-  
   // Only user (owner) can close the session (UI restriction)
   // Backend allows: admin, user owner, or specialist assigned
   // But UI only shows close button to owner as per requirements
@@ -341,15 +247,6 @@ export default function SpecialistChatScreen({ route, navigation }) {
   // Extract messages - support both camelCase and PascalCase from backend
   // Also support nested structure like session?.data?.messages (similar to SessionChatScreen)
   const messages = session?.messages || session?.Messages || session?.data?.messages || session?.data?.Messages || [];
-  
-  // Debug: log messages
-  console.log('=== Messages Debug ===');
-  console.log('session:', session);
-  console.log('session?.messages:', session?.messages);
-  console.log('session?.Messages:', session?.Messages);
-  console.log('session?.data?.messages:', session?.data?.messages);
-  console.log('Final messages:', messages);
-  
   // Format session title and state
   // Backend ChatSessionDto fields: SessionId, UserId, Title, State, Channel, SpecialistId, AssignedAt, ClosedAt, CreatedAt
   // Support both camelCase and PascalCase
@@ -392,13 +289,6 @@ export default function SpecialistChatScreen({ route, navigation }) {
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.error}>{error}</Text>
-        </View>
-      ) : null}
-      
-      {/* Debug info for mobile (temporary) - always show for debugging */}
-      {debugInfo ? (
-        <View style={styles.debugContainer}>
-          <Text style={styles.debugText}>{debugInfo}</Text>
         </View>
       ) : null}
       
@@ -571,17 +461,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#FEE2E2',
   },
   error: { color: '#dc2626', textAlign: 'center', fontSize: 14 },
-  debugContainer: {
-    backgroundColor: '#FEF3C7',
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FCD34D',
-  },
-  debugText: {
-    color: '#92400E',
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
   listContent: { padding: 16, paddingBottom: 20 },
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
   empty: { textAlign: 'center', color: '#6b7280', fontSize: 16, fontWeight: '600' },

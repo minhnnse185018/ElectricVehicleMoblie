@@ -105,28 +105,9 @@ export async function listSpecialistSessions({ state = 'waiting_specialist', pag
 }
 
 export async function assignSession(sessionId) {
-  try {
-    const res = await api.post(`/api/chat/sessions/${sessionId}/assignments`, null, { headers: await authHeaders() });
-    
-    // Debug: log response
-    console.log('=== assignSession API ===');
-    console.log('SessionId:', sessionId);
-    console.log('Response status:', res.status);
-    console.log('Raw res.data:', JSON.stringify(res.data, null, 2));
-    console.log('res.data?.success:', res.data?.success);
-    console.log('res.data?.data:', res.data?.data);
-    
-    // Backend returns ServiceResult: { success: true, data: { ...ChatSessionDto } }
-    return res.data;
-  } catch (e) {
-    // Debug: log error
-    console.error('=== assignSession API ERROR ===');
-    console.error('Error:', e);
-    console.error('Error response:', e?.response);
-    console.error('Error status:', e?.response?.status);
-    console.error('Error data:', e?.response?.data);
-    throw e;
-  }
+  const res = await api.post(`/api/chat/sessions/${sessionId}/assignments`, null, { headers: await authHeaders() });
+  // Backend returns ServiceResult: { success: true, data: { ...ChatSessionDto } }
+  return res.data;
 }
 
 export async function closeSession(sessionId) {
@@ -152,7 +133,7 @@ export async function sendSessionMessage(
     form.append('Content', text);
     // Keep a fallback field used by older handlers
     form.append('text', text);
-  }
+ }
 
   // Single primary image (API supports one "Image"). If multiple provided, send the first.
   if (Array.isArray(files) && files.length > 0) {
@@ -194,13 +175,6 @@ export async function sendSpecialistMessage(sessionId, { text, files = [] } = {}
     throw new Error('Chưa đăng nhập');
   }
   
-  // Debug: log request details
-  console.log('=== sendSpecialistMessage ===');
-  console.log('SessionId:', sessionId);
-  console.log('UserId:', userId);
-  console.log('Text:', text);
-  console.log('Files:', files);
-  
   const form = new FormData();
   // Backend ChatMessageCreateDto expects: SessionId, UserId, Content, Image (file), ImageUrl
   form.append('SessionId', sessionId);
@@ -219,7 +193,6 @@ export async function sendSpecialistMessage(sessionId, { text, files = [] } = {}
         name: f.name || 'attachment.jpg',
         type: f.type || 'image/jpeg',
       });
-      console.log('Added Image to form:', f.name || 'attachment.jpg');
     }
   }
   
@@ -229,27 +202,10 @@ export async function sendSpecialistMessage(sessionId, { text, files = [] } = {}
   };
   
   try {
-    console.log('Sending POST to:', `/api/chat/sessions/${sessionId}/messages`);
     const res = await api.post(`/api/chat/sessions/${sessionId}/messages`, form, { headers });
-    
-    // Debug: log response
-    console.log('=== sendSpecialistMessage Response ===');
-    console.log('Status:', res.status);
-    console.log('Raw res.data:', JSON.stringify(res.data, null, 2));
-    console.log('res.data?.success:', res.data?.success);
-    console.log('res.data?.data:', res.data?.data);
-    
     // Backend returns ServiceResult: { success: true, data: { ...ChatMessageDto } }
     return res.data;
   } catch (e) {
-    // Debug: log error
-    console.error('=== sendSpecialistMessage ERROR ===');
-    console.error('Error:', e);
-    console.error('Error response:', e?.response);
-    console.error('Error status:', e?.response?.status);
-    console.error('Error data:', e?.response?.data);
-    console.error('Error message:', e?.message);
-    
     // Re-throw with better error message
     if (e?.response?.data?.message) {
       throw new Error(e.response.data.message);

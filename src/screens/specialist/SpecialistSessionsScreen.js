@@ -10,11 +10,14 @@ export default function SpecialistSessionsScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [debugInfo, setDebugInfo] = useState(''); // Debug info for mobile
 
   const load = useCallback(async (silent = false) => {
     try {
-      if (!silent) setLoading(true);
+      if (!silent) {
+        setLoading(true);
+        // Clear items immediately when switching tabs to prevent badge flickering
+        setItems([]);
+      }
       setError('');
       // Tab 'waiting': state=waiting_specialist (no mine param)
       // Tab 'mine': state=assigned, mine=true (only sessions assigned to current specialist)
@@ -46,10 +49,6 @@ export default function SpecialistSessionsScreen() {
       console.log('Final list:', list);
       console.log('List length:', list.length);
       
-      // Debug info for mobile (visible on screen) - include more details
-      const debugMsg = `Tab: ${tab}\nItems: ${list.length}\nHas items: ${!!data?.items}\nHas Items: ${!!data?.Items}\nHas data.items: ${!!data?.data?.items}\nData keys: ${Object.keys(data || {}).join(', ')}\nData type: ${typeof data}\nIs Array: ${Array.isArray(data)}`;
-      setDebugInfo(debugMsg);
-      
       setItems(list);
     } catch (e) {
       // Debug: log error
@@ -63,14 +62,10 @@ export default function SpecialistSessionsScreen() {
       if (e?.response?.status === 404) {
         setItems([]);
         setError('');
-        // Debug info for 404
-        setDebugInfo(`Tab: ${tab}\n404 - No sessions found\nStatus: 404\nMessage: ${e?.response?.data?.message || 'Not found'}`);
       } else {
         const errorMsg = e?.response?.data?.message || e?.message || 'Lỗi tải danh sách phiên';
         setError(errorMsg);
         setItems([]);
-        // Debug info for error
-        setDebugInfo(`Tab: ${tab}\nError: ${errorMsg}\nStatus: ${e?.response?.status || 'unknown'}\nMessage: ${e?.message || 'Unknown error'}`);
       }
     } finally {
       if (!silent) setLoading(false);
@@ -231,7 +226,7 @@ export default function SpecialistSessionsScreen() {
           onPress={() => setTab('waiting')}
         >
           <Text style={[styles.tabText, tab === 'waiting' && styles.tabTextActive]}>Hàng chờ</Text>
-          {tab === 'waiting' && items.length > 0 && (
+          {tab === 'waiting' && !loading && items.length > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{items.length}</Text>
             </View>
@@ -241,8 +236,8 @@ export default function SpecialistSessionsScreen() {
           style={[styles.tab, tab === 'mine' && styles.tabActive]} 
           onPress={() => setTab('mine')}
         >
-          <Text style={[styles.tabText, tab === 'mine' && styles.tabTextActive]}>Đã gán cho tôi</Text>
-          {tab === 'mine' && items.length > 0 && (
+          <Text style={[styles.tabText, tab === 'mine' && styles.tabTextActive]}>Đã Nhận Chat</Text>
+          {tab === 'mine' && !loading && items.length > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{items.length}</Text>
             </View>
@@ -253,14 +248,6 @@ export default function SpecialistSessionsScreen() {
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.error}>{error}</Text>
-        </View>
-      ) : null}
-      
-      {/* Debug info for mobile (temporary) - always show for debugging */}
-      {debugInfo ? (
-        <View style={styles.debugContainer}>
-          <Text style={styles.debugText}>{debugInfo}</Text>
-          <Text style={styles.debugText}>{error ? `\nError: ${error}` : ''}</Text>
         </View>
       ) : null}
 
@@ -541,21 +528,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#9ca3af',
     fontSize: 14,
-  },
-  debugContainer: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-  },
-  debugText: {
-    color: '#92400E',
-    fontSize: 12,
-    fontFamily: 'monospace',
   },
 });
 
