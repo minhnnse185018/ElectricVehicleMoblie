@@ -44,9 +44,7 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.btnSecondaryText}>Tìm hiểu{"\n"}thêm</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={{ marginTop: 10 }} onPress={() => navigation.getParent()?.navigate('SpecialistSessions')}>
-            <Text style={{ color: '#166534', fontWeight: '600' }}>Chuyên viên? Xem các phiên chờ →</Text>
-          </TouchableOpacity>
+          {/* Removed specialist navigation - specialist has separate flow */}
         </View>
 
         <View style={styles.right}>

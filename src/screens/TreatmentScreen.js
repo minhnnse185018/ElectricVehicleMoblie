@@ -55,7 +55,7 @@ export default function TreatmentScreen({ navigation }) {
       const session = res?.data || res;
       const sessionId = session?.id || session?.sessionId;
       if (sessionId) {
-        navigation.getParent()?.navigate('SessionChat', { sessionId });
+        navigation.getParent()?.navigate('SessionChat', { sessionId, title: (title || '').trim() || (session?.title || '') });
       } else {
         setError('Không tìm thấy sessionId');
       }
@@ -90,6 +90,10 @@ export default function TreatmentScreen({ navigation }) {
           value={title}
           onChangeText={setTitle}
         />
+
+        {!!title?.trim() && (
+          <Text style={styles.preview}>Tieu de da nhap: {title}</Text>
+        )}
 
         <Text style={[styles.label, { marginTop: 8 }]}>Kênh:</Text>
         <View style={styles.channelRow}>
@@ -132,7 +136,7 @@ export default function TreatmentScreen({ navigation }) {
             {sessions.map((s, idx) => (
               <View key={s?.id || s?.sessionId || idx} style={styles.sessionItem}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sessionTitle}>Session #{s?.id || s?.sessionId}</Text>
+                  <Text style={styles.sessionTitle}>{(s?.title || '').trim() || `Session #${s?.id || s?.sessionId}`}</Text>
                   <Text style={styles.sessionMeta}>Channel: {s?.channel || 'ai'}</Text>
                   {!!s?.state && <Text style={styles.sessionMeta}>State: {s?.state}</Text>}
                 </View>
@@ -141,6 +145,7 @@ export default function TreatmentScreen({ navigation }) {
                   onPress={() =>
                     navigation.getParent()?.navigate('SessionChat', {
                       sessionId: s?.id || s?.sessionId,
+                      title: (s?.title || '').trim(),
                     })
                   }
                 >
@@ -171,6 +176,10 @@ const styles = StyleSheet.create({
   createBtn: { marginTop: 12, backgroundColor: '#22C55E', paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   createText: { color: '#fff', fontWeight: '700' },
   error: { color: '#dc2626', marginBottom: 8 },
+  preview: { color: '#166534', marginTop: 6, fontWeight: '600' },
+  previewBox: { marginTop: 12, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#F9FAFB', borderRadius: 10, padding: 10 },
+  previewLabel: { color: '#374151', fontWeight: '700', marginBottom: 6 },
+  code: { color: '#111827' },
   sessionItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   sessionTitle: { fontWeight: '700' },
   sessionMeta: { color: '#6b7280' },

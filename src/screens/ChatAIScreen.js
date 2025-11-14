@@ -74,7 +74,6 @@ export default function ChatAIScreen({ navigation }) {
           channel: "ai",
           title: "Tư vấn chăm sóc da",
         });
-        console.log("Chat session created:", res);
 
         const sess = res?.data || res;
         const sid = sess?.id || sess?.sessionId;
