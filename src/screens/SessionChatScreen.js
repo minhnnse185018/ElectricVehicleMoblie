@@ -83,6 +83,7 @@ export default function SessionChatScreen({ route, navigation }) {
         content: text,
         imageUrl: attachedImage?.uri,
         createdAt: new Date().toISOString(),
+        clientTime: Date.now(), // dùng timestamp local để sort ổn định
       };
       setPendingMessages((prev) => [...prev, local]);
 
@@ -151,21 +152,31 @@ export default function SessionChatScreen({ route, navigation }) {
     }
   };
 
-  // === MERGE + SORT ===
-  const baseMsg = session?.messages || session?.data?.messages || [];
-  const messages = [...baseMsg, ...pendingMessages];
+  // ===== FIX SORT ===== //
+  function safeTime(x) {
+    if (!x) return 0;
+    const t = new Date(x).getTime();
+    return isNaN(t) ? 0 : t;
+  }
 
-  // CHÈN SORT Ở ĐÂY — ĐÚNG VỊ TRÍ
-  messages.sort((a, b) => {
-    const timeA = a?.createdAt
-      ? new Date(a.createdAt).getTime()
-      : Number.MAX_SAFE_INTEGER;
-    const timeB = b?.createdAt
-      ? new Date(b.createdAt).getTime()
-      : Number.MAX_SAFE_INTEGER;
-    return timeA - timeB;
+  const baseMsg = session?.messages || session?.data?.messages || [];
+  let merged = [...baseMsg, ...pendingMessages].map((m) => ({
+    ...m,
+    _t: safeTime(m.createdAt || m.clientTime), // timestamp ổn định
+  }));
+
+  merged.sort((a, b) => {
+    const diff = a._t - b._t;
+    if (diff !== 0) return diff;
+
+    // fallback ổn định
+    return String(a.id || a.messageId || "").localeCompare(
+      String(b.id || b.messageId || "")
+    );
   });
-1
+
+  // ===== END SORT FIX ===== //
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -195,7 +206,7 @@ export default function SessionChatScreen({ route, navigation }) {
         <View style={{ flex: 1 }}>
           {/* MESSAGE LIST */}
           <ScrollView ref={listRef} contentContainerStyle={styles.list}>
-            {messages.map((m, idx) => {
+            {merged.map((m, idx) => {
               const mine = m.userId === currentUserId;
 
               return (
@@ -209,7 +220,6 @@ export default function SessionChatScreen({ route, navigation }) {
                       mine ? styles.bubbleMine : styles.bubbleOther,
                     ]}
                   >
-                    {/* IMAGE */}
                     {m.imageUrl ? (
                       <Image
                         source={{ uri: m.imageUrl }}
@@ -217,7 +227,6 @@ export default function SessionChatScreen({ route, navigation }) {
                       />
                     ) : null}
 
-                    {/* TEXT */}
                     {m.content ? (
                       <Text
                         style={[
